@@ -17,7 +17,7 @@
 
 Patron은 주식 초보자를 위한 교육 도구입니다. 복잡한 기술적 지표 없이 딱 하나의 질문에 답합니다: **"이 차트 패턴, 과거에도 있었을까? 그 이후엔 어떻게 됐을까?"**
 
-ResNet18로 차트 이미지를 512차원 벡터로 변환하고, FAISS로 약 50,000개의 과거 패턴 중 가장 유사한 것 3개(각각 다른 종목)를 찾아, 3·6·12개월 이후 수익률과 함께 반환합니다.
+ResNet18로 차트 이미지를 512차원 벡터로 바꾸고, 약 48,000개의 과거 패턴 중 가장 비슷한 3개를 찾아 3·6·12개월 뒤 수익률과 함께 보여줍니다. 3개는 서로 다른 종목이 되도록 설계했습니다([알려진 이슈](#known-issue) 참고).
 
 **이 서비스는 교육 목적이며, 투자 조언이 아닙니다.**
 
@@ -27,13 +27,13 @@ ResNet18로 차트 이미지를 512차원 벡터로 변환하고, FAISS로 약 5
 
 | 구성 요소 | 선택 | 이유 |
 |-----------|------|------|
-| 백본 모델 | ResNet18 (ImageNet 사전학습) | 경량이면서 공간 특징 추출 성능 우수 |
-| 학습 방식 | Triplet Loss + Semi-hard Negative Mining | 분류가 아닌 상대적 유사도 학습 |
-| 정규화 | MinMaxScaler (패턴별) | 차트 모양 보존. Log 정규화는 모양을 왜곡함 (실험 2 참고) |
-| 검색 | FAISS L2 | 50,000개 벡터 빠른 정확 검색 |
-| 중복 제거 | 종목 단위 | 같은 종목이 Top-3를 독점하는 현상 방지 |
+| 백본 모델 | ResNet18 (ImageNet 사전학습) | 가벼우면서도 이미지의 공간적 특징을 잘 잡아냄 |
+| 학습 방식 | Triplet Loss + Semi-hard Negative Mining | 분류가 아니라 "무엇이 더 비슷한가"를 학습 |
+| 정규화 | MinMaxScaler (패턴별) | 차트 모양을 그대로 유지. Log 정규화는 모양을 왜곡함 (실험 3 참고) |
+| 검색 | FAISS IndexFlatL2 (정확한 L2) | 약 48,000개 벡터를 전부 비교하는 정확 검색. FastAPI 서버는 같은 L2 계산을 NumPy로 수행 |
+| 중복 제거 | 종목 단위 | 한 종목이 Top-3를 다 차지하지 않게 함 |
 
-가장 중요한 발견: **Log 정규화는 수치상으로는 더 좋아 보였지만, 실제 차트 모양을 왜곡**해서 숫자는 가깝지만 눈으로 보면 다른 패턴을 검색하는 문제가 발생했습니다. 결국 MinMaxScaler를 최종 채택했습니다. 전체 실험 기록은 `ARCHITECTURE.md`를 참고하세요.
+가장 중요한 발견: **Log 정규화는 수치상으로는 더 좋아 보였지만 차트 모양을 왜곡**했습니다. 그래서 숫자로는 가깝지만 눈으로 보면 닮지 않은 패턴을 찾았고, 결국 MinMaxScaler를 최종 채택했습니다. 전체 실험 기록은 `ARCHITECTURE.md`를 참고하세요.
 
 ---
 
@@ -55,14 +55,14 @@ ResNet18로 차트 이미지를 512차원 벡터로 변환하고, FAISS로 약 5
 | # | 노트북 | 내용 |
 |---|--------|------|
 | 01 | `01_preprocessing.ipynb` | OHLC 데이터 수집 → 슬라이딩 윈도우 → MinMaxScaler → 그레이스케일 차트 이미지 생성 |
-| 02 | `02_training_v1.ipynb` | ResNet18 + Triplet Loss 학습 (**최종 모델**, T4 기준 약 6.5시간) |
+| 02 | `02_training_v1.ipynb` | ResNet18 + Triplet Loss 학습 (**최종 모델**, A100 기준 차트 이미지 생성 약 5시간 + 학습 약 1.5시간) |
 | 03 | `03_faiss_search.ipynb` | FAISS 인덱스 구축, 종목 중복 제거 Top-3 검색 구현 |
 | 04 | `04_normalization_compare.ipynb` | MinMaxScaler vs Log 정규화 비교 분석 (실험 2) |
-| 05 | `05_preprocessing_v2.ipynb` | Log 정규화 전처리 (실험 3 — 최종 기각) |
+| 05 | `05_preprocessing_v2.ipynb` | Log 정규화 전처리 (실험 3 — 기각) |
 | 06 | `06_training_v2.ipynb` | Log 정규화 적용 학습 (실험 3 — 기각) |
 | 07 | `07_visual_comparison.ipynb` | 실험 1 vs 실험 3 시각적 비교 |
 | 08 | `08_realtime_search.ipynb` | yfinance 실시간 데이터로 검색 데모 |
-| 09 | `09_embedding_precompute.ipynb` | FastAPI용 임베딩 50,000개 사전 계산 및 저장 |
+| 09 | `09_embedding_precompute.ipynb` | FastAPI용으로 검색 대상 임베딩 약 48,000개(3개월 뒤 수익률이 있는 패턴) 미리 계산·저장 |
 
 > 노트북 04~07은 정규화 실험 기록입니다. 최종 모델 실행에는 필요 없지만, MinMaxScaler를 선택한 근거가 담겨 있습니다.
 
@@ -82,7 +82,7 @@ Body: ticker (str, 예: "AAPL")
 2. 최근 12주 OHLC 데이터를 실시간으로 가져옴
 3. 그레이스케일 차트 이미지로 변환
 4. ResNet18로 512차원 임베딩 추출
-5. FAISS 인덱스에서 Top-3 유사 패턴 검색 (종목 중복 제거)
+5. 저장된 임베딩 약 48,000개 전체와 정확한 L2 거리를 계산해 Top-3 선택 (노트북 03에서 만든 FAISS IndexFlatL2 인덱스와 같은 결과)
 6. 섹터, 날짜, 이후 수익률 메타데이터 반환
 
 **실행 방법** (`patron_fastapi/requirements.txt` 참고):
@@ -93,13 +93,18 @@ pip install -r requirements.txt
 
 # 모델 파일을 아래 경로에 배치:
 # patron_fastapi/models/best_model.pth     (ResNet18 가중치)
-# patron_fastapi/data/embeddings.npy       (50k 임베딩)
+# patron_fastapi/data/embeddings.npy       (약 48k 임베딩)
+# patron_fastapi/data/faiss_index.bin      (FAISS 인덱스, 서버 시작 시 로드)
 # patron_fastapi/data/metadata_all.csv     (패턴 메타데이터)
 
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-서버 설치 가이드 및 알려진 이슈는 `patron_fastapi/SERVER.md`를 참고하세요.
+서버 설치 가이드는 `patron_fastapi/SERVER.md`를 참고하세요.
+
+<a id="known-issue"></a>
+**알려진 이슈:** 서버의 종목 단위 중복 제거가 의도대로 동작하지 않습니다. `seen_tickers` 집합을 검사만 하고
+종목을 추가하지 않아서, Top-3에 같은 종목이 두 번 이상 나올 수 있습니다(예: 같은 종목의 연속된 두 달).
 
 ---
 
@@ -111,6 +116,15 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 | 실험 3 — 기각 | Log | 0.15개 | 0.061 | 수치는 좋지만 시각적으로 다름 ❌ |
 
 실험 3이 수치 지표는 더 좋았지만, 실제 차트 이미지를 눈으로 비교했을 때 유사하지 않은 패턴을 검색했습니다. 실험 1 (MinMaxScaler)을 최종 모델로 채택하고, 중복 문제는 검색 시 종목 단위 중복 제거로 해결했습니다.
+
+<p align="center">
+  <img src="docs/visual_comparison.png" alt="실험 1과 실험 3 검색 결과 시각 비교" width="100%"/>
+</p>
+
+*`07_visual_comparison.ipynb`의 쿼리 #1(GS). **위쪽 줄 — 실험 1, MinMaxScaler(채택):** L2 거리는 더 멀지만(0.15–0.23),
+쿼리처럼 크게 떨어졌다가 계단식으로 오르는 모양을 그대로 찾습니다. **아래쪽 줄 — 실험 3, Log(기각):** 거리는 훨씬 가깝고(약 0.04)
+중복 종목도 없지만, 쿼리와 닮지 않은 완만한 상승 차트들입니다. 더 좋은 지표가 엉뚱한 것을 재고 있었던 셈입니다.
+(이미지 라벨은 원래 노트북 이름입니다: patron_03 = 실험 1, patron_07/08 = 실험 3.)*
 
 ---
 
@@ -141,16 +155,17 @@ patron/
 
 **포함되지 않음** (Google Drive 보관):
 - `best_model.pth` — 학습된 ResNet18 가중치
-- `embeddings.npy` — 50,000개 임베딩 벡터
+- `embeddings.npy` — 약 48,000개 임베딩 벡터
+- `faiss_index.bin` — FAISS 인덱스
 - `images.tar` / `images_v2.tar` — 차트 이미지 아카이브 (각 약 2.4 GB)
 
 ---
 
 ## 개발 배경
 
-Patron은 주식 초보자를 위한 AI 교육 플랫폼 **Dipping**의 차트 패턴 검색 모듈입니다. Dipping은 단국대학교 창업동아리 QuantrumAI에서 개발했으며, **교육부 인증 U300 정부 창업 지원 프로그램**에 선정된 프로젝트입니다.
+Patron은 주식 초보자를 위한 AI 교육 플랫폼 **Dipping**의 차트 패턴 검색 모듈입니다. Dipping은 단국대학교 창업동아리 QuantrumAI의 6인 팀이 개발했고, **교육부 인증 U300 정부 창업 지원 프로그램**에 선정됐습니다.
 
-신바다가 QuantrumAI ML 엔지니어로서 2025년 7월부터 12월까지 Patron의 전체 AI 파이프라인(데이터 수집, 모델 학습, FAISS 인덱싱, FastAPI 서버)을 단독 개발했습니다.
+그중 Patron이 제 담당이었습니다. QuantrumAI의 ML 엔지니어로서 2025년 7월부터 12월까지 Patron의 AI 파이프라인 전체(데이터 수집, 모델 학습, FAISS 인덱싱, FastAPI 서버)를 혼자 개발했습니다.
 
 ---
 
