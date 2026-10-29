@@ -23,6 +23,14 @@ The system encodes chart images as 512-dimensional embeddings using a fine-tuned
 
 ---
 
+## Context
+
+Patron is the chart pattern similarity module of **Dipping**, an AI-powered stock education platform for retail investors built at QuantrumAI — a startup club at Dankook University selected for the **U300 Government Startup Program** (certified by the Ministry of Education).
+
+Dipping was built by a six-person team. Patron was my part: as the ML engineer at QuantrumAI (July–December 2025), I built its full AI pipeline alone — data collection, model training, FAISS indexing, and FastAPI serving.
+
+---
+
 ## Key Design Choices
 
 | Component | Choice | Why |
@@ -160,14 +168,6 @@ patron/
 - `embeddings.npy` — ~48k precomputed embeddings
 - `faiss_index.bin` — FAISS index
 - `images.tar` / `images_v2.tar` — chart image archives (~2.4 GB each)
-
----
-
-## Context
-
-Patron is the chart pattern similarity module of **Dipping**, an AI-powered stock education platform for retail investors built at QuantrumAI — a startup club at Dankook University selected for the **U300 Government Startup Program** (certified by the Ministry of Education).
-
-Dipping was built by a six-person team. Patron was my part: as the ML engineer at QuantrumAI (July–December 2025), I built its full AI pipeline alone — data collection, model training, FAISS indexing, and FastAPI serving.
 
 ---
 
